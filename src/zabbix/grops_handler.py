@@ -16,38 +16,41 @@ def handler_grop():
     # открывается excel файл
     data = open_excel(grop_file)
     if data is not None:
-        # создается параметр для запроса всех групп на сервере распложенных в корневой группе
-        grop_request = GetParamZabbixModel(
-            output=['groupid', 'name'],
-            search={'name': root_group},
-            sortfield='groupid',
-            startSearch=True,
-            selectHosts='count',
-        )
-        try:
-            # запрашиваются группы с сервера
-            group_server = get_grops(grop_request)
-            # если ответ корректный
-            if 'result' in group_server:
-                # валидиуруются входные данные и сравниваются с данными с сервера
-                data, state_error = valid_group(data[1:], group_server['result'])
-                # проверяется наличие ошибок валидации
-                if state_error is False:
-                    # при остутствии ошибок валидации обрабатываются задания и проверяется их выполнеие
-                    data = create_group_params(data)
-                    data = post_valid_result(data)
-                    # результат сохраняется в excel файле
-                    f_save_xlsx('GROUPS_HANDLER', 'results', header_results_group, data)
-                else:
-                    # при наличии ошибок валидации формуруется отчет в excel файле
-                    f_save_xlsx('GROUPS_HANDLER', 'results', header_results_group, data)
+        if len(data) > 1:
+            # создается параметр для запроса всех групп на сервере распложенных в корневой группе
+            grop_request = GetParamZabbixModel(
+                output=['groupid', 'name'],
+                search={'name': root_group},
+                sortfield='groupid',
+                startSearch=True,
+                selectHosts='count',
+            )
+            try:
+                # запрашиваются группы с сервера
+                group_server = get_grops(grop_request)
+                # если ответ корректный
+                if 'result' in group_server:
+                    # валидиуруются входные данные и сравниваются с данными с сервера
+                    data, state_error = valid_group(data[1:], group_server['result'])
+                    # проверяется наличие ошибок валидации
+                    if state_error is False:
+                        # при остутствии ошибок валидации обрабатываются задания и проверяется их выполнеие
+                        data = handler_group_params(data)
+                        data = post_valid_result(data)
+                        # результат сохраняется в excel файле
+                        f_save_xlsx('GROUPS_HANDLER', 'results', header_results_group, data)
+                    else:
+                        # при наличии ошибок валидации формуруется отчет в excel файле
+                        f_save_xlsx('GROUPS_HANDLER', 'results', header_results_group, data)
 
-            elif 'error' in group_server:
-                raise Exception(f'ошибка group_server: {group_server["error"]}')
-            else:
-                raise Exception(f'не известный результат работы handler_grop.get_grops, result: {group_server}')
-        except Exception as ex:
-            print(ex)
+                elif 'error' in group_server:
+                    raise Exception(f'ошибка group_server: {group_server["error"]}')
+                else:
+                    raise Exception(f'не известный результат работы handler_grop.get_grops, result: {group_server}')
+            except Exception as ex:
+                print(ex)
+        else:
+            print('Ошибка - файл с заданием пустой')
 
 
 def get_grops(data: GetParamZabbixModel) -> dict:
@@ -241,7 +244,7 @@ def valid_group(data: list[list], zabbix_req: list[dict]) -> tuple[list[list], b
     return data, state_error
 
 
-def create_group_params(data: list[list]) -> list[list]:
+def handler_group_params(data: list[list]) -> list[list]:
     """
     функция сортирует данные от пользвателя по задачаем add, del, update
     отправялет отсортированные данные в функцию для проведения оперций с группами на сервере
@@ -345,7 +348,7 @@ def post_valid_result(data: list[list]) -> list[list]:
                     else:
                         data[count_t][5] = 'Ошибка'
 
-                if data[count_t][0] == 'del' and data[count_t][2] == group_server['result'][index]['name']:
+                if data[count_t][0] == 'del' and data[count_t][1] == group_server['result'][index]['name']:
                     # если найдена группа в ответе серера с командой на удаление, то ошибка
                     data[count_t][5] = 'Ошибка'
             else:
