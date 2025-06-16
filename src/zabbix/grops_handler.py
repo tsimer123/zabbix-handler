@@ -348,7 +348,7 @@ def post_valid_result(data: list[list]) -> list[list]:
                     else:
                         data[count_t][5] = 'Ошибка'
 
-                if data[count_t][0] == 'del' and data[count_t][2] == group_server['result'][index]['name']:
+                if data[count_t][0] == 'del' and data[count_t][1] == group_server['result'][index]['name']:
                     # если найдена группа в ответе серера с командой на удаление, то ошибка
                     data[count_t][5] = 'Ошибка'
             else:

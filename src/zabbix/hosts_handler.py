@@ -1,5 +1,6 @@
 import json
 import re
+from bisect import bisect_left
 
 from jsonrpcclient import request
 
@@ -37,6 +38,8 @@ def handler_hosts():
             data = copy_excel_to_format(data[1:])
             data, state_error = valid_group(data)
             if state_error is False:
+                data = handler_host_comand(data)
+                data = post_valid_result(data)
                 f_save_xlsx('HOST_HANDLER', 'results', header_results_host, data)
             else:
                 # при наличии ошибок валидации формуруется отчет в excel файле
@@ -182,10 +185,11 @@ def valid_group(data: list[list]) -> tuple[list[list], bool]:
     return data, state_error
 
 
-def get_host_name_filter(data: GetParamZabbixModel) -> list[dict]:
+def get_host_name_filter(data: list[str]) -> list[dict]:
     """
-    функция получает параметр для запроса групп на сервер и возвращает результат в фрмате словаря,
-    если при запросе возникла ошибка то вызывается исключение
+    функция получает список имен узла сети и по нему формиурется запрос
+    запрос разбиывается на чанки размером set_group_step_data
+    возвращается id, name и информация о узла сети
     """
     result = []
     # создается класс для обращения по http и отпарвялется запрос
@@ -196,8 +200,38 @@ def get_host_name_filter(data: GetParamZabbixModel) -> list[dict]:
     for i in range(0, len(data), step_data):
         # создаем запрос к серверу на вывод всех узлов сети из задания
         host_filter = GetParamZabbixModel(
-            output=['hostid', 'host'],
-            filter={'host': data[i : i + step_data]},
+            output=['hostid', 'host'], filter={'host': data[i : i + step_data]}, selectHostGroups='extend'
+        )
+        params = request('host.get', params=host_filter.model_dump(exclude_none=True))
+        hosts = req.post_request_with_token(params)
+        if hosts.status is True:
+            data_request = json.loads(hosts.data)
+            if 'result' in data_request:
+                result = result + data_request['result']
+            else:
+                raise Exception(f'Венулись не корректные данные: {data_request}')
+        else:
+            raise Exception(f'Ошибка: {hosts.error}')
+
+    return result
+
+
+def get_host_ids_filter(data: list[str]) -> list[dict]:
+    """
+    функция получает список имен узла сети и по нему формиурется запрос
+    запрос разбиывается на чанки размером set_group_step_data
+    возвращается id, name и информация о узла сети
+    """
+    result = []
+    # создается класс для обращения по http и отпарвялется запрос
+    req = BaseRequest(host=HOST, api_token=API_TOKEN)
+    # set_group_step_data - указывается в config файле
+    step_data = set_group_step_data
+    # делим при необоходимости список заданий на чанки размером step_data
+    for i in range(0, len(data), step_data):
+        # создаем запрос к серверу на вывод всех узлов сети из задания
+        host_filter = GetParamZabbixModel(
+            output=['hostid', 'host'], hostids=data[i : i + step_data], sortfield='hostid'
         )
         params = request('host.get', params=host_filter.model_dump(exclude_none=True))
         hosts = req.post_request_with_token(params)
@@ -214,6 +248,11 @@ def get_host_name_filter(data: GetParamZabbixModel) -> list[dict]:
 
 
 def get_host_valid(data: list[list], list_name_host: list[str]) -> tuple[list[list], bool]:
+    """
+    функция проверяет наличие или отсутвие узла сети на сервере,
+    а также принадлженость узла сети разрешнной группе
+    """
+
     state_error = False
     # запрос к серверву
     hosts = get_host_name_filter(list_name_host)
@@ -224,19 +263,36 @@ def get_host_valid(data: list[list], list_name_host: list[str]) -> tuple[list[li
         for host_srv in hosts:
             # сравнение имени хоста из задания в траслите с хостами на сервере
             if transliterate_host(host_in[1]) == host_srv['host']:
-                # если в задании команада add то ошибика
-                if host_in[0] in command_hosts_not_present:
+                # формиурем список групп хоста на сервере
+                tmp_groups_host = [grp['name'] for grp in host_srv['hostgroups']]
+                trigger_group_permit = False
+                for tmp_grp_host in tmp_groups_host:
+                    # проверка входит ли хост в разрешенную группу
+                    if tmp_grp_host == root_group.replace('/', '') or tmp_grp_host.startswith(root_group) is True:
+                        trigger_group_permit = True
+
+                if trigger_group_permit is True:
+                    # если в задании команада add то ошибика
+                    if host_in[0] in command_hosts_not_present:
+                        data[count_host].append(False)
+                        data[count_host].append(f'Такой хост уже существует: {host_srv}')
+                        data[count_host].append('Отмена')
+                        data[count_host].append(host_srv['hostid'])
+                        state_error = True
+                    # если в задании команада del, update, active и то отмечаем как рабочую
+                    if host_in[0] in command_hosts_present:
+                        data[count_host].append(True)
+                        data[count_host].append('')
+                        data[count_host].append('')
+                        data[count_host].append(host_srv['hostid'])
+                else:
+                    # узел сети не состояит ни в одной из разрешенной группе
                     data[count_host].append(False)
-                    data[count_host].append(f'Такой хост уже существует: {host_srv}')
+                    data[count_host].append(f'Узел сети не состоит ни в одной разрешенной группе {tmp_groups_host}')
                     data[count_host].append('Отмена')
                     data[count_host].append(host_srv['hostid'])
                     state_error = True
-                # если в задании команада del, update, active и то отмечаем как рабочую
-                if host_in[0] in command_hosts_present:
-                    data[count_host].append(True)
-                    data[count_host].append('')
-                    data[count_host].append('')
-                    data[count_host].append(host_srv['hostid'])
+
                 trigger_task = 1
                 break
         # если хоста из задания нет на серевере
@@ -286,6 +342,11 @@ def get_tmpt(data: list[list], list_tmpl: list[str]) -> tuple[list[list], bool]:
 
 
 def get_grp(data: list[list], list_grops: list[str]) -> tuple[list[list], bool, list[dict]]:
+    """
+    функция сверяет группы узла из задания и наличие их на сервере,
+    а также проверяет разрешение на работу с группой
+    """
+
     state_error = False
     grop_request = GetParamZabbixModel(
         output=['groupid', 'name'],
@@ -302,7 +363,12 @@ def get_grp(data: list[list], list_grops: list[str]) -> tuple[list[list], bool, 
                 for tmp_group in temp_grops:
                     for grp_server in group_server['result']:
                         if tmp_group == grp_server['groupid']:
-                            if grp_server['name'].startswith(root_group.replace('/', '')) is False:
+                            if (
+                                grp_server['name'] == root_group.replace('/', '')
+                                or grp_server['name'].startswith(root_group) is True
+                            ):
+                                pass
+                            else:
                                 list_error_group_permit.append(grp_server['name'])
                             trigger_temp_group += 1
                             break
@@ -383,9 +449,9 @@ def handler_host_comand(data: list[list]) -> list[list]:
         # сопоставляем полученные данные от сервера с входными данными
         data = match_task(data, active_group, active_index)
 
-    if len(deactive_index) > 0:
+    if len(deactive_host_params) > 0:
         # отправляем отстортированные задачи далее для проведжения опрераций на сервере
-        deactive_group = set_host('host.update', deactive_index)
+        deactive_group = set_host('host.update', deactive_host_params)
         # сопоставляем полученные данные от сервера с входными данными
         data = match_task(data, deactive_group, deactive_index)
 
@@ -395,7 +461,7 @@ def handler_host_comand(data: list[list]) -> list[list]:
 def create_extended_parameters(task: list) -> ParamCreateHostZabbixModel:
     # создаются параметры для добавления узла сети
     # создается параметр с интерфейсами
-    interface = [InterfacesHostZabbixModel(ip=task[2])]
+    interfaces = [InterfacesHostZabbixModel(ip=task[2])]
 
     # создается параметр с группами
     groups = []
@@ -408,9 +474,8 @@ def create_extended_parameters(task: list) -> ParamCreateHostZabbixModel:
     temp_tempalate = str(task[3]).split(';')
     for template in temp_tempalate:
         templates.append(TemplatesHostZabbixModel(templateid=template))
-
     result_param = ParamCreateHostZabbixModel(
-        host=transliterate_host(task[1]), interface=interface, groups=groups, templates=templates
+        host=transliterate_host(task[1]), interfaces=interfaces, groups=groups, templates=templates
     )
 
     return result_param
@@ -459,8 +524,6 @@ def match_task(data: list[list], set_host: list[str], index_host: list[str]) -> 
         for count_host, host in enumerate(set_host):
             # при типе задачи на добавление в задачу добавляем id созданного узла сети
             if data[index_host[count_host]][0] in command_hosts_not_present:
-                data[index_host[count_host]].append('')
-                data[index_host[count_host]].append('')
                 data[index_host[count_host]].append(host)
             if data[index_host[count_host]][0] in command_hosts_present and data[index_host[count_host]][8] != host:
                 # при типе задачи на удаление и изменение проверяем совпадения id группы
@@ -468,5 +531,61 @@ def match_task(data: list[list], set_host: list[str], index_host: list[str]) -> 
                 raise Exception('Номер группы в data не равен в cgroup')
     else:
         raise Exception('Добавлены(изменены) не все элеементы, set_host не равно index_host')
+
+    return data
+
+
+def post_valid_result(data: list[list]) -> list[list]:
+    """
+    функция проводит валидацию данных после проведения оперций на сервере с ними
+    """
+    # создается список из id узлов сети из задания
+    hostids = [line[8] for line in data]
+    # отпарвляем запрос со списокком id
+    host_server = get_host_ids_filter(hostids)
+
+    # если ответ от сервера положительный
+    # создается список с id узлов сети для индексации полученных с сервера
+    index_host = [line['hostid'] for line in host_server]
+    # удаляется из имени группы корневая группа
+
+    # for count_gs, _ in enumerate(group_server['result']):
+    #     group_server['result'][count_gs]['name'] = group_server['result'][count_gs]['name'].split('/', 1)[1]
+
+    for count_t, task in enumerate(data):
+        # поиск бинарным поиском в индексе ответа сервера по id узлов сети из задания
+        index = bisect_left(index_host, task[8])
+        if index != len(index_host) and index_host[index] == task[8]:
+            if data[count_t][0] == 'add':
+                # если имя узла сети из задания сходится с именем в ответе от сервера
+                if transliterate_host(data[count_t][1]) == host_server[index]['host']:
+                    # записываем в задание сообщение об успешном выполнении
+                    data[count_t][7] = 'Добавлено'
+                else:
+                    data[count_t][7] = 'Ошибка'
+
+            if data[count_t][0] in ['active', 'deactive']:
+                if transliterate_host(data[count_t][1]) == host_server[index]['host']:
+                    data[count_t][7] = 'Обновлено'
+                else:
+                    data[count_t][7] = 'Ошибка'
+
+            if data[count_t][0] == 'del' and transliterate_host(data[count_t][1]) == host_server[index]['host']:
+                # если найден узел сети в ответе серера с командой на удаление, то ошибка
+                data[count_t][7] = 'Ошибка'
+        else:
+            # если индекс искомого узла сети больше длины списка (не найден элепмент) с id узлами сети
+            # или узел сети из списка id узлов сети не равeн узлу сети из задания
+            if data[count_t][0] == 'del':
+                # если команда на удаление првоеряем имя группы из задания и ответа от сервера
+                if transliterate_host(data[count_t][1]) != host_server[index]['host']:
+                    # если имена узлов сети не совпали то записываем успешное выполенние задачи
+                    data[count_t][7] = 'Удалено'
+                else:
+                    data[count_t][7] = 'Ошибка'
+
+            if data[count_t][0] in ['add', 'active', 'deactive']:
+                # если задание на добавление узла сети или изменение то записываем ошибку выполнения задачи
+                data[count_t][7] = 'Ошибка'
 
     return data
