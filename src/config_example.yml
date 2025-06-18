@@ -1,0 +1,9 @@
+connect:
+  host: "127.0.0.1"
+
+permit:
+  root-group: "host-test/"
+
+history:
+  day-history-get: 7
+  limit-history-get: 100

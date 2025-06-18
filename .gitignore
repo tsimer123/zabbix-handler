@@ -19,3 +19,4 @@ build/
 *.spec
 icon.ico
 test_test3.py
+config.yml

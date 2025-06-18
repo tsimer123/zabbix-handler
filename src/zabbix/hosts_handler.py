@@ -36,7 +36,7 @@ def handler_hosts():
     if data is not None:
         if len(data) > 1:
             data = copy_excel_to_format(data[1:])
-            data, state_error = valid_group(data)
+            data, state_error = valid_host(data)
             if state_error is False:
                 data = handler_host_comand(data)
                 data = post_valid_result(data)
@@ -58,7 +58,7 @@ def copy_excel_to_format(data: list[list]):
     return data
 
 
-def valid_group(data: list[list]) -> tuple[list[list], bool]:
+def valid_host(data: list[list]) -> tuple[list[list], bool]:
     list_name_host = []
     state_error = False
     for count_host, host in enumerate(data):
@@ -83,25 +83,10 @@ def valid_group(data: list[list]) -> tuple[list[list], bool]:
                             if trigger_tmplt == len(temp_tempalate):
                                 # проверяются группы на валидность
                                 if host[4] is not None:
-                                    # получаем список групп
-                                    temp_groups = str(host[4]).split(';')
-                                    trigger_group = 0
-                                    # проверяется каждую группу на коректность написания
-                                    for group in temp_groups:
-                                        if re.fullmatch(r'\d+', str(group)) is not None:
-                                            trigger_group += 1
-                                    if trigger_group == len(temp_groups):
-                                        # если все данные валидные, то добаввляем имя узла сети в список для запроса наличия
-                                        # таких узлов на сервере
-                                        list_name_host.append(transliterate_host(host[1]))
-                                    else:
-                                        # имя группы не валидны
-                                        data[count_host].append(False)
-                                        data[count_host].append(
-                                            'Имя группы может содержать: a-z, A-Z, 0-9, а-я, А-Я, -, /'
-                                        )
-                                        data[count_host].append('Отмена')
-                                        state_error = True
+                                    # валидация имени группы
+                                    data, list_name_host, state_error = valid_group_name(
+                                        host, data, count_host, list_name_host, state_error
+                                    )
                                 else:
                                     if host[0] in command_extended_parameters:
                                         # имя группы не валидны
@@ -185,6 +170,30 @@ def valid_group(data: list[list]) -> tuple[list[list], bool]:
     return data, state_error
 
 
+def valid_group_name(
+    host: list, data: list[list], count_host: int, list_name_host: list[str], state_error: bool
+) -> tuple[list[list], list[str], bool]:
+    # получаем список групп
+    temp_groups = str(host[4]).split(';')
+    trigger_group = 0
+    # проверяется каждую группу на коректность написания
+    for group in temp_groups:
+        if re.fullmatch(r'\d+', str(group)) is not None:
+            trigger_group += 1
+    if trigger_group == len(temp_groups):
+        # если все данные валидные, то добаввляем имя узла сети в список для запроса наличия
+        # таких узлов на сервере
+        list_name_host.append(transliterate_host(host[1]))
+    else:
+        # имя группы не валидны
+        data[count_host].append(False)
+        data[count_host].append('Имя группы может содержать: a-z, A-Z, 0-9, а-я, А-Я, -, /')
+        data[count_host].append('Отмена')
+        state_error = True
+
+    return data, list_name_host, state_error
+
+
 def get_host_name_filter(data: list[str]) -> list[dict]:
     """
     функция получает список имен узла сети и по нему формиурется запрос
@@ -218,7 +227,7 @@ def get_host_name_filter(data: list[str]) -> list[dict]:
 
 def get_host_ids_filter(data: list[str]) -> list[dict]:
     """
-    функция получает список имен узла сети и по нему формиурется запрос
+    функция получает список id узлов сети и по нему формиурется запрос
     запрос разбиывается на чанки размером set_group_step_data
     возвращается id, name и информация о узла сети
     """
