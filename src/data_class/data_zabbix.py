@@ -12,12 +12,14 @@ class GetParamZabbixModel(BaseModel, validate_assignment=True):
     search: dict | None = None
     templateid: list[str] | None = None
     hostids: list[str] | None = None
+    groupids: list[str] | None = None
     sortfield: str | None = None
     searchWildcardsEnabled: bool | None = None
     searchByAny: bool | None = None
     startSearch: bool | None = None
     selectHosts: Literal['extend', 'count'] | None = None
     selectHostGroups: Literal['extend'] | None = None
+    selectInterfaces: Literal['extend', 'count'] | None = None
 
 
 class InterfacesHostZabbixModel(BaseModel, validate_assignment=True):

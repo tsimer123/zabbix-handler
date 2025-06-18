@@ -1,6 +1,5 @@
 import json
 import re
-from bisect import bisect_left
 
 from jsonrpcclient import request
 
@@ -332,8 +331,9 @@ def post_valid_result(data: list[list]) -> list[list]:
             group_server['result'][count_gs]['name'] = group_server['result'][count_gs]['name'].split('/', 1)[1]
         for count_t, task in enumerate(data):
             # поиск бинарным поиском в индексе ответа сервера по id группы из задания
-            index = bisect_left(index_group, task[6])
-            if index != len(index_group) and index_group[index] == task[6]:
+            # index = bisect_left(index_group, task[6])
+            index = search_index_group(index_group, task[6])
+            if index != -1 and index_group[index] == task[6]:
                 if data[count_t][0] == 'add':
                     # если имя группы из задания сходится с именем в ответе от сервера
                     if data[count_t][1] == group_server['result'][index]['name']:
@@ -373,3 +373,28 @@ def post_valid_result(data: list[list]) -> list[list]:
         raise Exception(f'не известный результат работы post_valid_result.get_grops, result: {group_server}')
 
     return data
+
+
+def search_index_group(arr, value):
+    """
+    Бинарный поиск в списке строк.
+
+    :param arr: Отсортированный список словарей
+    :param value: Искомое значение
+    :return: Индекс найденного элемента или -1
+    """
+    value = int(value)
+    left, right = 0, len(arr) - 1
+
+    while left <= right:
+        mid = (left + right) // 2
+        mid_val = int(arr[mid])
+
+        if mid_val == value:
+            return mid
+        elif mid_val < value:
+            left = mid + 1
+        else:
+            right = mid - 1
+
+    return -1
