@@ -220,7 +220,7 @@ def get_host_name_filter(data: list[str]) -> list[dict]:
             else:
                 raise Exception(f'Венулись не корректные данные: {data_request}')
         else:
-            raise Exception(f'Ошибка: {hosts.error}')
+            raise Exception(f'Ошибка: {hosts}')
 
     return result
 

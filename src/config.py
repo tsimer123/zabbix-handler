@@ -2,7 +2,13 @@ import os
 
 from dotenv import load_dotenv
 
-from parse_config import get_host_zabbix
+from parse_config import (
+    get_day_history_get,
+    get_group_step_data,
+    get_host_zabbix,
+    get_limit_history_get,
+    get_root_group,
+)
 
 load_dotenv()
 
@@ -17,17 +23,17 @@ hosts_file = 'hosts.xlsx'
 items_file = 'items.xlsx'
 
 # настройки окружения в zabbix
-root_group = 'sims/'
+root_group = get_root_group()
 
 # количество элементов в одном запросе при работе с группами
-set_group_step_data = 2
+set_group_step_data = get_group_step_data()
 
 # Блок истории
 # глубина запросов данных в днях
-day_history_get = 2
+day_history_get = get_day_history_get()
 
 # лимит полученных данных истории
-limit_history_get = 500
+limit_history_get = get_limit_history_get()
 
 # Блок со списками команд для групп
 # разрешенные команды для групп

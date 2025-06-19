@@ -43,7 +43,23 @@ def get_root_group() -> int | None:
         raise Exception('В файле config.yml не указан параметр permit -> root-group')
 
 
-def get_day_history_get() -> str:
+def get_group_step_data() -> int:
+    result = get_data()
+    if result is not None:
+        if 'request' in result and 'set-group-step-data' in result['request']:
+            if type(result['request']['set-group-step-data']) is int:
+                return result['request']['set-group-step-data']
+            else:
+                raise Exception(
+                    f'В файле config.yml параметр request -> set-group-step-data не целое число: {result["request"]["set-group-step-data"]}'
+                )
+        else:
+            raise Exception('В файле config.yml не указан параметр request -> set-group-step-data')
+    else:
+        raise Exception('В файле config.yml не указан параметр request -> set-group-step-data')
+
+
+def get_day_history_get() -> int:
     result = get_data()
     if result is not None:
         if 'history' in result and 'day-history-get' in result['history']:
@@ -59,7 +75,7 @@ def get_day_history_get() -> str:
         raise Exception('В файле config.yml не указан параметр history -> day-history-get')
 
 
-def get_limit_history_get() -> str:
+def get_limit_history_get() -> int:
     result = get_data()
     if result is not None:
         if 'history' in result and 'limit-history-get' in result['history']:

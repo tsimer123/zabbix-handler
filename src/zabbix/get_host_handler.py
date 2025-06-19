@@ -1,5 +1,6 @@
 import json
 import re
+import sys
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
@@ -211,8 +212,11 @@ def get_history(list_items: list[dict], req: BaseRequest):
                 data_request = json.loads(history.data)
                 for history in data_request:
                     if 'result' in history:
-                        print(f'history_id {history["id"]}')
-                        result.append(history['result'])
+                        history_id = int(history['id'])
+                        if history_id < history['id']:
+                            print(f'history_id: {history_id} < history["id"] {history["id"]}')
+                        if len(history['result']) > 0:
+                            result.append(history['result'])
                     else:
                         raise Exception(f'Венулись не корректные данные: {data_request}')
             else:
@@ -272,7 +276,15 @@ def search_history(arr, key, value):
 
     while left <= right:
         mid = (left + right) // 2
-        mid_val = arr[mid][0][key]
+        try:
+            mid_val = arr[mid][0][key]
+        except Exception as ex:
+            print(ex)
+            print(arr[mid])
+            print(key)
+            print(len(arr))
+            print(arr)
+            sys.exit(0)
 
         if mid_val == value:
             return mid
