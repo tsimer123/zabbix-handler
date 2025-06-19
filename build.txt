@@ -1,0 +1,1 @@
+pyinstaller .\src\app.py --noconfirm --onefile --icon=icon.ico --clean --hidden-import "zabbix" --hidden-import "zabbix.get_host_handler" --hidden-import "zabbix.grops_handler" --hidden-import "zabbix.hosts_handler"
